@@ -17,16 +17,18 @@ resource "aws_lambda_function" "health_lambda" {
   role            = aws_iam_role.lambda_role.arn
   handler         = "health_lambda.lambda_handler"
   runtime         = "python3.11"
+  timeout         = 10
   source_code_hash = filebase64sha256("../lambdas/health_lambda.zip")
 
   environment {
     variables = {
-      DYNAMODB_ENDPOINT = "http://localstack:4566"
-      HEALTH_TABLE_NAME = aws_dynamodb_table.health_table.name
-      AWS_DEFAULT_REGION = "us-east-1"
-      AWS_ACCESS_KEY_ID = "test"
+      # Must match compose service name so Lambda container can resolve hostname
+      DYNAMODB_ENDPOINT   = "http://localstack-us-east-1:4566"
+      LOCALSTACK_HOSTNAME = "localstack-us-east-1"
+      HEALTH_TABLE_NAME   = aws_dynamodb_table.health_table.name
+      AWS_DEFAULT_REGION  = "us-east-1"
+      AWS_ACCESS_KEY_ID   = "test"
       AWS_SECRET_ACCESS_KEY = "test"
-      LOCALSTACK_HOSTNAME = "localstack"
     }
   }
 

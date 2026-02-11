@@ -9,7 +9,7 @@ COMPOSE_PG    := $(COMPOSE_BASE) -f compose/postgres.yml
 .PHONY: up-localstack-us-west-2 down-localstack-us-west-2
 .PHONY: up-postgres down-postgres
 .PHONY: up-localstack down-localstack up-all down-all
-.PHONY: package init apply destroy test clean output
+.PHONY: package init apply destroy test clean output open-localstack open-localstack-w2
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -26,6 +26,8 @@ help: ## Show this help message
 	@echo 'Legacy / convenience:'
 	@echo '  start                     Same as up-localstack-us-east-1'
 	@echo '  stop                      Same as down-localstack-us-east-1'
+	@echo '  open-localstack           Open LocalStack us-east-1 in browser'
+	@echo '  open-localstack-w2        Open LocalStack us-west-2 in browser'
 	@echo ''
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-25s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
@@ -73,6 +75,15 @@ start: up-localstack-us-east-1 ## Start LocalStack (us-east-1)
 stop: down-localstack-us-east-1 ## Stop LocalStack (us-east-1)
 
 restart: stop start ## Restart LocalStack us-east-1
+
+# ---- Open in browser (open on macOS, xdg-open on Linux) ----
+OPEN_CMD := $(if $(filter Darwin,$(shell uname -s)),open,xdg-open)
+
+open-localstack: ## Open LocalStack us-east-1 in browser
+	$(OPEN_CMD) http://localhost:4566
+
+open-localstack-w2: ## Open LocalStack us-west-2 in browser
+	$(OPEN_CMD) http://localhost:4567
 
 # ---- Lambda / Terraform ----
 package: ## Package Lambda functions

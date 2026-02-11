@@ -1,7 +1,7 @@
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Get DynamoDB endpoint - LocalStack Lambda functions need to connect to LocalStack service
 # Try multiple approaches for LocalStack compatibility
@@ -32,7 +32,7 @@ def lambda_handler(event, context):
     """
     try:
         # Write current timestamp to DynamoDB
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         table.put_item(
             Item={
                 'id': 'health-check',

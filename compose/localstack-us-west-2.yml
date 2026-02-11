@@ -10,7 +10,7 @@ services:
       - "127.0.0.1:4567:4566"
       - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      - SERVICES=lambda,apigateway,iam,sts,dynamodb
+      - SERVICES=lambda,apigateway,iam,sts,dynamodb,logs
       - DEBUG=1
       - DATA_DIR=/tmp/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
