@@ -1,0 +1,29 @@
+# LocalStack us-east-1. Use with base: -f docker-compose.yml -f compose/localstack-us-east-1.yml
+
+version: '3.8'
+
+services:
+  localstack-us-east-1:
+    container_name: localstack-us-east-1
+    image: localstack/localstack:latest
+    ports:
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
+    environment:
+      - SERVICES=lambda,apigateway,iam,sts,dynamodb
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - "./.localstack-us-east-1:/var/lib/localstack-us-east-1"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - localstack-network

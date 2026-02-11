@@ -21,3 +21,8 @@ output "dynamodb_table_name" {
   value = aws_dynamodb_table.health_table.name
   description = "Name of the DynamoDB table"
 }
+
+output "api_gateway_id" {
+  value = aws_api_gateway_rest_api.hello_api.id
+  description = "ID of the API Gateway"
+}
