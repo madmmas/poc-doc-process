@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
 from mangum import Mangum
 
@@ -20,30 +21,47 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize FastAPI app
+# Note: Don't use root_path here - Mangum handles path construction from API Gateway events
 app = FastAPI(
     title="S3 Upload API",
     description="API for uploading files to S3 bucket",
-    version="1.0.0",
-    root_path="/api"  # For OpenAPI docs URL generation
+    version="1.0.0"
 )
 
 
 class StripPathPrefixMiddleware(BaseHTTPMiddleware):
     """Middleware to strip /api prefix from request paths."""
     async def dispatch(self, request: Request, call_next):
-        # Strip /api prefix if present
+        # Strip /api prefix if present (handle both /api/health and /api/api/health cases)
         original_path = request.url.path
-        if original_path.startswith("/api"):
-            # Remove "/api" prefix
-            new_path = original_path[4:] or "/"
-            # Create a new scope with updated path
-            scope = dict(request.scope)
+        logger.info(f"Original path: {original_path}, scope path_info: {request.scope.get('path_info', 'N/A')}")
+        
+        # Remove all leading /api prefixes (handles double prefix case)
+        new_path = original_path
+        while new_path.startswith("/api"):
+            new_path = new_path[4:] or "/"
+        
+        if new_path != original_path:
+            # Create a completely new scope with updated paths
+            scope = request.scope.copy()
             scope["path"] = new_path
             scope["raw_path"] = new_path.encode()
-            # Create new request with updated scope
+            scope["path_info"] = new_path  # This is critical for FastAPI routing
+            scope["root_path"] = ""  # Clear root_path
+            # Also update the query string path if present
+            if "query_string" in scope:
+                # Keep query string as is
+                pass
+            
+            # Create new request with updated scope - use StarletteRequest for proper construction
             request = Request(scope, request.receive)
-            logger.info(f"Path rewritten: {original_path} -> {new_path}")
-        return await call_next(request)
+            logger.info(f"Path rewritten: {original_path} -> {new_path} (path_info={request.scope.get('path_info')})")
+        else:
+            logger.info(f"Path does not start with /api, keeping as: {original_path}")
+        
+        response = await call_next(request)
+        logger.info(f"Response status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
+        return response
 
 
 # Add path stripping middleware first (before CORS)
@@ -93,6 +111,11 @@ async def root():
         "upload_prefix": UPLOAD_PREFIX
     }
 
+# Also add route with /api prefix as fallback (in case middleware doesn't work)
+@app.get("/api/health")
+async def health_with_prefix():
+    """Health check endpoint with /api prefix (fallback)."""
+    return await health()
 
 @app.get("/health")
 async def health():
@@ -150,6 +173,15 @@ async def health():
             "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
         }
 
+
+# Fallback route with /api prefix
+@app.post("/api/upload")
+async def upload_file_with_prefix(
+    file: UploadFile = File(...),
+    folder: Optional[str] = Form(None)
+):
+    """Upload endpoint with /api prefix (fallback)."""
+    return await upload_file(file, folder)
 
 @app.post("/upload")
 async def upload_file(
@@ -231,6 +263,14 @@ async def upload_file(
             detail="An unexpected error occurred during file upload"
         )
 
+
+# Fallback route with /api prefix
+@app.post("/api/upload/json")
+async def upload_json_file_with_prefix(
+    file: UploadFile = File(...)
+):
+    """Upload JSON endpoint with /api prefix (fallback)."""
+    return await upload_json_file(file)
 
 @app.post("/upload/json")
 async def upload_json_file(
@@ -323,4 +363,9 @@ async def upload_json_file(
 
 
 # Lambda handler using Mangum adapter
-handler = Mangum(app, lifespan="off")
+# text_mime_types ensures proper content-type handling
+handler = Mangum(
+    app, 
+    lifespan="off",
+    text_mime_types=["application/json", "text/plain"]
+)

@@ -9,8 +9,9 @@ COMPOSE_PG    := $(COMPOSE_BASE) -f compose/postgres.yml
 .PHONY: up-localstack-us-west-2 down-localstack-us-west-2
 .PHONY: up-postgres down-postgres
 .PHONY: up-localstack down-localstack up-all down-all
-.PHONY: package package-fastapi init apply destroy test clean output open-localstack open-localstack-w2
+.PHONY: package package-fastapi package-fastapi-docker init apply destroy test clean clean-fastapi output open-localstack open-localstack-w2
 .PHONY: test-fastapi-unit test-fastapi-integration test-fastapi-all install-test-deps-fastapi
+.PHONY: install-admin-web dev-admin-web build-admin-web deploy-admin-web
 .PHONY: test-s3 test-s3-success test-s3-fail test-s3-check test-s3-logs test-s3-clean
 
 help: ## Show this help message
@@ -38,6 +39,16 @@ help: ## Show this help message
 	@echo '  test-fastapi-integration  Run FastAPI integration tests (requires LocalStack)'
 	@echo '  test-fastapi-all          Run all FastAPI tests'
 	@echo '  install-test-deps-fastapi Install test dependencies'
+	@echo ''
+	@echo 'FastAPI Lambda Packaging:'
+	@echo '  package-fastapi-docker   Package using Docker (recommended)'
+	@echo '  clean-fastapi             Clean installed dependencies from source'
+	@echo ''
+	@echo 'Admin Web App:'
+	@echo '  install-admin-web         Install admin web dependencies'
+	@echo '  dev-admin-web             Start admin web dev server'
+	@echo '  build-admin-web            Build admin web for production'
+	@echo '  deploy-admin-web           Deploy admin web to S3'
 	@echo ''
 	@echo 'Legacy / convenience:'
 	@echo '  start                     Same as up-localstack-us-east-1'
@@ -107,13 +118,32 @@ package: package-fastapi ## Package all Lambda functions
 	cd lambdas && zip -r health_lambda.zip health_lambda.py
 	cd lambdas && zip -r summarize_document.zip summarize_document.py
 
-package-fastapi: ## Package FastAPI Lambda with dependencies
+package-fastapi: ## Package FastAPI Lambda with dependencies (uses Docker for Linux compatibility)
 	@echo "=== Packaging FastAPI Lambda ==="
-	@echo "Installing dependencies..."
-	cd lambdas/fastapi-s3-upload && \
-		pip install -r requirements.txt -t . --upgrade --quiet && \
-		zip -r ../fastapi-s3-upload.zip . -x "*.pyc" "__pycache__/*" "*.dist-info/*" "*.egg-info/*" "*.txt" "README.md" "tests/*" "pytest.ini" && \
-		echo "FastAPI Lambda packaged successfully"
+	@if command -v docker > /dev/null 2>&1; then \
+		echo "Using Docker to ensure Linux-compatible dependencies..."; \
+		cd lambdas/fastapi-s3-upload && ./build-lambda.sh; \
+	else \
+		echo "⚠️  Docker not found. Creating temporary build directory..."; \
+		echo "⚠️  For production, install Docker and use: make package-fastapi-docker"; \
+		cd lambdas/fastapi-s3-upload && \
+		BUILD_TMP=$$(mktemp -d) && \
+		cp app.py requirements.txt "$$BUILD_TMP/" && \
+		cd "$$BUILD_TMP" && \
+		pip install -r requirements.txt -t . --upgrade && \
+		zip -r ../../fastapi-s3-upload.zip . -x "*.pyc" "__pycache__/*" "*.dist-info/*" "*.egg-info/*" "*.txt" && \
+		cd - && rm -rf "$$BUILD_TMP" && \
+		echo "⚠️  FastAPI Lambda packaged (may have runtime issues - use Docker build for production)"; \
+	fi
+
+package-fastapi-docker: ## Package FastAPI Lambda using Docker (recommended - ensures Linux compatibility)
+	@echo "=== Packaging FastAPI Lambda with Docker ==="
+	@if ! command -v docker > /dev/null 2>&1; then \
+		echo "Error: Docker is required for this command"; \
+		echo "Install Docker from: https://www.docker.com/get-started"; \
+		exit 1; \
+	fi
+	cd lambdas/fastapi-s3-upload && ./build-lambda.sh
 
 install-test-deps-fastapi: ## Install runtime and test dependencies for FastAPI Lambda
 	@echo "=== Installing FastAPI dependencies ==="
@@ -296,14 +326,42 @@ test-fastapi: ## Test FastAPI Lambda endpoints (requires API_ID)
 	@echo ""
 	@echo "=== FastAPI tests complete ==="
 
-clean: ## Clean up generated files
+# ---- Admin Web App ----
+ADMIN_WEB_BUCKET := admin-web-poc
+ADMIN_WEB_DIR := admin-web
+
+install-admin-web: ## Install admin web dependencies
+	@echo "=== Installing Admin Web dependencies ==="
+	cd $(ADMIN_WEB_DIR) && npm install
+
+dev-admin-web: ## Start admin web development server
+	@echo "=== Starting Admin Web dev server ==="
+	cd $(ADMIN_WEB_DIR) && npm run dev
+
+build-admin-web: ## Build admin web for production
+	@echo "=== Building Admin Web ==="
+	cd $(ADMIN_WEB_DIR) && npm run build
+
+deploy-admin-web: build-admin-web ## Deploy admin web to S3
+	@echo "=== Deploying Admin Web to S3 ==="
+	@echo "Bucket: $(ADMIN_WEB_BUCKET)"
+	@echo "Note: Ensure bucket exists and static website hosting is enabled"
+	aws s3 sync $(ADMIN_WEB_DIR)/out/ s3://$(ADMIN_WEB_BUCKET)/ --delete --endpoint-url http://localhost:4566 || \
+		echo "Deployment failed. Check bucket exists and AWS credentials."
+
+clean-fastapi: ## Clean up installed dependencies from fastapi-s3-upload directory
+	@echo "=== Cleaning FastAPI Lambda source directory ==="
+	cd lambdas/fastapi-s3-upload && \
+		rm -rf __pycache__ .pytest_cache .coverage htmlcov && \
+		rm -rf *.egg-info *.dist-info bin/ && \
+		rm -rf annotated_types anyio boto3 botocore dateutil fastapi idna jmespath mangum multipart pydantic pydantic_core s3transfer sniffio starlette typing_inspection urllib3 && \
+		rm -f six.py typing_extensions.py && \
+		echo "FastAPI source directory cleaned"
+
+clean: clean-fastapi ## Clean up all generated files
 	rm -f lambdas/*.zip
-	rm -rf lambdas/fastapi-s3-upload/__pycache__
-	rm -rf lambdas/fastapi-s3-upload/tests/__pycache__
-	rm -rf lambdas/fastapi-s3-upload/*.egg-info
-	rm -rf lambdas/fastapi-s3-upload/*.dist-info
-	rm -rf lambdas/fastapi-s3-upload/.pytest_cache
-	rm -rf lambdas/fastapi-s3-upload/.coverage
-	rm -rf lambdas/fastapi-s3-upload/htmlcov
+	rm -rf admin-web/.next
+	rm -rf admin-web/out
+	rm -rf admin-web/node_modules
 	rm -rf iac/.terraform
 	rm -f iac/terraform.tfstate iac/terraform.tfstate.backup
