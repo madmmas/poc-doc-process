@@ -32,7 +32,7 @@ resource "aws_s3_bucket_notification" "scrap_document_poc_notification" {
     lambda_function_arn = aws_lambda_function.summarize_document.arn
     events              = ["s3:ObjectCreated:*"]
     filter_prefix       = "new/"  # Only trigger on objects uploaded to "new/" folder
-    # filter_suffix can be added here if needed (e.g., ".pdf", ".docx")
+    filter_suffix       = ".json" # Only trigger on JSON files
   }
 
   depends_on = [

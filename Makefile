@@ -10,6 +10,7 @@ COMPOSE_PG    := $(COMPOSE_BASE) -f compose/postgres.yml
 .PHONY: up-postgres down-postgres
 .PHONY: up-localstack down-localstack up-all down-all
 .PHONY: package init apply destroy test clean output open-localstack open-localstack-w2
+.PHONY: test-s3 test-s3-success test-s3-fail test-s3-check test-s3-logs test-s3-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -22,6 +23,14 @@ help: ## Show this help message
 	@echo '  up-all                    Start LocalStack us-east-1 + Postgres'
 	@echo '  down-<module>            Stop a module (e.g. down-postgres)'
 	@echo '  down-all                  Stop all composed services'
+	@echo ''
+	@echo 'S3 & Lambda Tests:'
+	@echo '  test-s3                   Run both success and failure S3 tests'
+	@echo '  test-s3-success           Test successful document processing'
+	@echo '  test-s3-fail               Test failed document processing'
+	@echo '  test-s3-check             Check S3 bucket contents'
+	@echo '  test-s3-logs              Show Lambda function logs'
+	@echo '  test-s3-clean             Clean up test files from S3'
 	@echo ''
 	@echo 'Legacy / convenience:'
 	@echo '  start                     Same as up-localstack-us-east-1'
@@ -121,6 +130,95 @@ test: ## Test the API (requires API_ID)
 	@echo "Testing /health endpoint:"
 	curl "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/health"
 	@echo ""
+
+# ---- S3 Tests ----
+S3_BUCKET := scrap-document-poc
+S3_ENDPOINT := http://localhost:4566
+AWS_CLI := aws --endpoint-url $(S3_ENDPOINT) --region us-east-1
+
+test-s3-check: ## Check S3 bucket contents and structure
+	@echo "=== Checking S3 Bucket: $(S3_BUCKET) ==="
+	@echo ""
+	@echo "Bucket exists check:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/ 2>/dev/null || echo "Bucket does not exist or is empty"
+	@echo ""
+	@echo "Contents of 'new/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/new/ 2>/dev/null || echo "  (empty)"
+	@echo ""
+	@echo "Contents of 'processed/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/processed/ 2>/dev/null || echo "  (empty)"
+	@echo ""
+	@echo "Contents of 'failed/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/failed/ 2>/dev/null || echo "  (empty)"
+	@echo ""
+
+test-s3-success: ## Test S3 Lambda trigger with success case (moves to processed/)
+	@echo "=== Testing S3 Lambda Trigger - Success Case ==="
+	@echo ""
+	@echo "1. Uploading test-success.json to s3://$(S3_BUCKET)/new/"
+	@$(AWS_CLI) s3 cp tests/test-success.json s3://$(S3_BUCKET)/new/test-success.json
+	@echo ""
+	@echo "2. Waiting 5 seconds for Lambda to process..."
+	@sleep 5
+	@echo ""
+	@echo "3. Checking results:"
+	@echo "   - File should be removed from 'new/' folder"
+	@echo "   - File should appear in 'processed/' folder"
+	@echo ""
+	@echo "Contents of 'new/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/new/ 2>/dev/null || echo "  (empty - good!)"
+	@echo ""
+	@echo "Contents of 'processed/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/processed/ 2>/dev/null || echo "  (empty - Lambda may not have triggered yet)"
+	@echo ""
+	@echo "=== Success test complete. Check Lambda logs with: make test-s3-logs ==="
+
+test-s3-fail: ## Test S3 Lambda trigger with failure case (moves to failed/)
+	@echo "=== Testing S3 Lambda Trigger - Failure Case ==="
+	@echo ""
+	@echo "1. Uploading test-fail.json to s3://$(S3_BUCKET)/new/"
+	@$(AWS_CLI) s3 cp tests/test-fail.json s3://$(S3_BUCKET)/new/test-fail.json
+	@echo ""
+	@echo "2. Waiting 5 seconds for Lambda to process..."
+	@sleep 5
+	@echo ""
+	@echo "3. Checking results:"
+	@echo "   - File should be removed from 'new/' folder"
+	@echo "   - File should appear in 'failed/' folder"
+	@echo ""
+	@echo "Contents of 'new/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/new/ 2>/dev/null || echo "  (empty - good!)"
+	@echo ""
+	@echo "Contents of 'failed/' folder:"
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/failed/ 2>/dev/null || echo "  (empty - Lambda may not have triggered yet)"
+	@echo ""
+	@echo "=== Failure test complete. Check Lambda logs with: make test-s3-logs ==="
+
+test-s3: test-s3-success test-s3-fail ## Run both S3 success and failure tests
+	@echo ""
+	@echo "=== All S3 tests complete ==="
+	@echo "Run 'make test-s3-check' to see final bucket state"
+
+test-s3-logs: ## Show Lambda function logs for summarize_document
+	@echo "=== Lambda Function Logs (summarize_document) ==="
+	@echo ""
+	@echo "Fetching logs from LocalStack..."
+	@$(AWS_CLI) logs tail /aws/lambda/summarize_document --follow 2>/dev/null || \
+		echo "Note: Logs may not be available yet. Try: docker logs localstack-us-east-1 | grep summarize"
+	@echo ""
+	@echo "Alternative: Check LocalStack container logs:"
+	@echo "  docker logs localstack-us-east-1 | grep -i summarize"
+
+test-s3-clean: ## Clean up test files from S3 bucket
+	@echo "=== Cleaning up test files from S3 ==="
+	@echo "Removing test files from all folders..."
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/new/test-success.json 2>/dev/null || true
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/new/test-fail.json 2>/dev/null || true
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/processed/test-success.json 2>/dev/null || true
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/processed/test-fail.json 2>/dev/null || true
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/failed/test-success.json 2>/dev/null || true
+	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/failed/test-fail.json 2>/dev/null || true
+	@echo "Cleanup complete!"
 
 clean: ## Clean up generated files
 	rm -f lambdas/*.zip

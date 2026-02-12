@@ -25,7 +25,11 @@ def lambda_handler(event, context):
     """
     # Configure S3 client for LocalStack (if endpoint is set)
     s3_endpoint = os.environ.get('S3_ENDPOINT_URL', None)
-    s3_config = {}
+    s3_config = {
+        'region_name': os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+        'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID', 'test'),
+        'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY', 'test')
+    }
     if s3_endpoint:
         s3_config['endpoint_url'] = s3_endpoint
     
@@ -56,15 +60,24 @@ def lambda_handler(event, context):
             print(f"  - Content Type: {content_type}")
             print(f"  - Size: {content_length} bytes")
             
-            # TODO: Add document processing logic here
-            # - Download document from S3
-            # - Extract text (for PDF, DOCX, etc.)
-            # - Generate summary using AI/ML service
-            # - Store summary in DynamoDB or return response
+            # Download and parse JSON file
+            obj_response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+            json_content = obj_response['Body'].read().decode('utf-8')
+            document_data = json.loads(json_content)
             
-            # For now, simulate successful processing
-            # Replace this with your actual document processing logic
-            processing_successful = True  # Set to False to test failure path
+            print(f"Parsed JSON content: {json.dumps(document_data, indent=2)}")
+            
+            # Check if document should fail (for testing failure path)
+            # If JSON contains "should_fail": true, simulate processing failure
+            should_fail = document_data.get('should_fail', False)
+            processing_successful = not should_fail
+            
+            print(f"Processing decision: should_fail={should_fail}, processing_successful={processing_successful}")
+            
+            # TODO: Add actual document processing logic here
+            # - Extract text from document
+            # - Generate summary using AI/ML service
+            # - Store summary in DynamoDB
             
             if processing_successful:
                 # Move to processed folder

@@ -1,0 +1,8 @@
+{
+  "title": "Test Document - Failure Case",
+  "content": "This is a test document that should fail processing.",
+  "author": "Test User",
+  "timestamp": "2026-02-12T12:00:00Z",
+  "should_fail": true,
+  "error_reason": "Simulated processing failure for testing"
+}
