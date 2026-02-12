@@ -1,6 +1,9 @@
 # FastAPI and ASGI server
 fastapi==0.104.1
 mangum==0.17.0
+# pydantic and pydantic-core versions must be compatible
+# pydantic 2.5.0 requires pydantic-core==2.14.1 (don't pin pydantic-core separately)
+pydantic==2.5.0
 
 # AWS SDK
 boto3==1.29.7

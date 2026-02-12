@@ -9,8 +9,10 @@ from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from mangum import Mangum
 
 # Configure logging
@@ -21,16 +23,41 @@ logger.setLevel(logging.INFO)
 app = FastAPI(
     title="S3 Upload API",
     description="API for uploading files to S3 bucket",
-    version="1.0.0"
+    version="1.0.0",
+    root_path="/api"  # For OpenAPI docs URL generation
 )
 
-# Configure CORS
+
+class StripPathPrefixMiddleware(BaseHTTPMiddleware):
+    """Middleware to strip /api prefix from request paths."""
+    async def dispatch(self, request: Request, call_next):
+        # Strip /api prefix if present
+        original_path = request.url.path
+        if original_path.startswith("/api"):
+            # Remove "/api" prefix
+            new_path = original_path[4:] or "/"
+            # Create a new scope with updated path
+            scope = dict(request.scope)
+            scope["path"] = new_path
+            scope["raw_path"] = new_path.encode()
+            # Create new request with updated scope
+            request = Request(scope, request.receive)
+            logger.info(f"Path rewritten: {original_path} -> {new_path}")
+        return await call_next(request)
+
+
+# Add path stripping middleware first (before CORS)
+app.add_middleware(StripPathPrefixMiddleware)
+
+# Configure CORS - must be after path stripping middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Initialize S3 client
@@ -70,21 +97,58 @@ async def root():
 @app.get("/health")
 async def health():
     """Detailed health check."""
+    s3_endpoint = os.environ.get('S3_ENDPOINT_URL', 'AWS (default)')
+    bucket_name = S3_BUCKET_NAME
+    
     try:
         s3_client = get_s3_client()
-        # Check if bucket exists and is accessible
-        s3_client.head_bucket(Bucket=S3_BUCKET_NAME)
+        
+        # Try to check bucket accessibility using list_objects_v2 (more reliable than head_bucket)
+        # This requires s3:ListBucket permission which we have
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            MaxKeys=1  # Just check if we can access, don't need actual objects
+        )
+        
         return {
             "status": "healthy",
-            "bucket": S3_BUCKET_NAME,
-            "accessible": True
+            "bucket": bucket_name,
+            "accessible": True,
+            "s3_endpoint": s3_endpoint,
+            "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
         }
     except ClientError as e:
-        logger.error(f"S3 health check failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"S3 bucket not accessible: {str(e)}"
-        )
+        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+        error_message = e.response.get('Error', {}).get('Message', str(e))
+        logger.error(f"S3 health check failed: {error_code} - {error_message}")
+        logger.error(f"Bucket: {bucket_name}, Endpoint: {s3_endpoint}")
+        
+        # Return 200 with error details instead of raising exception
+        # This allows the frontend to display the error message
+        return {
+            "status": "unhealthy",
+            "bucket": bucket_name,
+            "accessible": False,
+            "error": {
+                "code": error_code,
+                "message": error_message
+            },
+            "s3_endpoint": s3_endpoint,
+            "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error during health check: {str(e)}", exc_info=True)
+        return {
+            "status": "unhealthy",
+            "bucket": bucket_name,
+            "accessible": False,
+            "error": {
+                "code": "UnexpectedError",
+                "message": str(e)
+            },
+            "s3_endpoint": s3_endpoint,
+            "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        }
 
 
 @app.post("/upload")
