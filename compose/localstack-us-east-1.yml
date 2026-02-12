@@ -17,6 +17,8 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_REMOTE_DOCKER=false
     volumes:
       - "./.localstack-us-east-1:/var/lib/localstack-us-east-1"
       - "/var/run/docker.sock:/var/run/docker.sock"
