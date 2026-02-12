@@ -41,10 +41,15 @@ class TestHealthEndpoints:
     @mock_s3
     def test_health_endpoint_failure(self, client):
         """Test health endpoint when S3 bucket doesn't exist."""
-        # Don't create bucket - should fail
+        # Don't create bucket - should return 200 with accessible: false
+        # (This allows frontend to display error details)
         response = client.get("/health")
-        assert response.status_code == 503
-        assert "not accessible" in response.json()["detail"].lower()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "unhealthy"
+        assert data["accessible"] is False
+        assert "error" in data
+        assert "code" in data["error"]
 
 
 class TestUploadEndpoint:
