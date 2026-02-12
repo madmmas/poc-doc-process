@@ -13,6 +13,60 @@ resource "aws_s3_bucket" "scrap_document_poc" {
   }
 }
 
+# S3 bucket for admin web app (static website hosting)
+resource "aws_s3_bucket" "admin_web" {
+  bucket        = "admin-web-poc"
+  force_destroy = true
+
+  tags = {
+    Name        = "Admin Web App"
+    Environment = "dev"
+  }
+}
+
+# Enable static website hosting for admin web bucket
+resource "aws_s3_bucket_website_configuration" "admin_web" {
+  bucket = aws_s3_bucket.admin_web.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "404.html"
+  }
+}
+
+# Public read access for admin web bucket (for static website)
+resource "aws_s3_bucket_public_access_block" "admin_web" {
+  bucket = aws_s3_bucket.admin_web.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# Bucket policy for public read access
+resource "aws_s3_bucket_policy" "admin_web" {
+  bucket = aws_s3_bucket.admin_web.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.admin_web.arn}/*"
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.admin_web]
+}
+
 # S3 bucket versioning (optional - enable if needed)
 resource "aws_s3_bucket_versioning" "scrap_document_poc_versioning" {
   bucket = aws_s3_bucket.scrap_document_poc.id
