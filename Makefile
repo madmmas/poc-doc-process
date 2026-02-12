@@ -89,6 +89,7 @@ open-localstack-w2: ## Open LocalStack us-west-2 in browser
 package: ## Package Lambda functions
 	cd lambdas && zip -r hello_lambda.zip lambda_function.py
 	cd lambdas && zip -r health_lambda.zip health_lambda.py
+	cd lambdas && zip -r summarize_document.zip summarize_document.py
 
 init: ## Initialize Terraform
 	cd iac && terraform init
