@@ -56,3 +56,40 @@ resource "aws_lambda_permission" "api_gateway_health" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.hello_api.execution_arn}/*/*"
 }
+
+# Lambda function for document summarization (triggered by S3)
+resource "aws_lambda_function" "summarize_document" {
+  filename         = "../lambdas/summarize_document.zip"
+  function_name    = "summarize_document"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "summarize_document.lambda_handler"
+  runtime         = "python3.11"
+  timeout         = 300  # 5 minutes for document processing
+  source_code_hash = filebase64sha256("../lambdas/summarize_document.zip")
+
+  environment {
+    variables = {
+      S3_BUCKET_NAME       = aws_s3_bucket.scrap_document_poc.bucket
+      S3_ENDPOINT_URL      = "http://localstack-us-east-1:4566"  # LocalStack S3 endpoint
+      LOCALSTACK_HOSTNAME   = "localstack-us-east-1"
+      AWS_DEFAULT_REGION   = "us-east-1"
+      AWS_ACCESS_KEY_ID    = "test"
+      AWS_SECRET_ACCESS_KEY = "test"
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_policy,
+    aws_iam_role_policy.s3_policy,
+    aws_s3_bucket.scrap_document_poc
+  ]
+}
+
+# Lambda permission for S3 to invoke summarize_document
+resource "aws_lambda_permission" "s3_invoke_summarize_document" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.summarize_document.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.scrap_document_poc.arn
+}

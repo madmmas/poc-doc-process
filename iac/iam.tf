@@ -47,3 +47,37 @@ resource "aws_iam_role_policy" "dynamodb_policy" {
     ]
   })
 }
+
+# IAM policy for S3 access (for summarize_document Lambda)
+resource "aws_iam_role_policy" "s3_policy" {
+  name = "s3-access-policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:HeadObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.scrap_document_poc.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.scrap_document_poc.arn
+        ]
+      }
+    ]
+  })
+}
