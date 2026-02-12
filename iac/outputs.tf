@@ -26,3 +26,13 @@ output "api_gateway_id" {
   value = aws_api_gateway_rest_api.hello_api.id
   description = "ID of the API Gateway"
 }
+
+output "api_gateway_fastapi_url" {
+  value = "http://localhost:4566/restapis/${aws_api_gateway_rest_api.hello_api.id}/${aws_api_gateway_stage.hello_stage.stage_name}/_user_request_/"
+  description = "API Gateway FastAPI base URL (use /upload, /upload/json, /health endpoints)"
+}
+
+output "fastapi_lambda_function_name" {
+  value = aws_lambda_function.fastapi_s3_upload.function_name
+  description = "Name of the FastAPI Lambda function"
+}

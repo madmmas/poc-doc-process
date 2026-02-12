@@ -89,3 +89,61 @@ resource "aws_api_gateway_stage" "hello_stage" {
   rest_api_id   = aws_api_gateway_rest_api.hello_api.id
   stage_name    = "dev"
 }
+
+# API Gateway Resource for FastAPI (catch-all proxy)
+resource "aws_api_gateway_resource" "fastapi_proxy" {
+  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  parent_id   = aws_api_gateway_rest_api.hello_api.root_resource_id
+  path_part   = "{proxy+}"
+}
+
+# API Gateway Method for FastAPI (ANY - catches all HTTP methods)
+resource "aws_api_gateway_method" "fastapi_proxy_method" {
+  rest_api_id   = aws_api_gateway_rest_api.hello_api.id
+  resource_id   = aws_api_gateway_resource.fastapi_proxy.id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+# API Gateway Integration for FastAPI
+resource "aws_api_gateway_integration" "fastapi_proxy_integration" {
+  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+  resource_id = aws_api_gateway_resource.fastapi_proxy.id
+  http_method = aws_api_gateway_method.fastapi_proxy_method.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.fastapi_s3_upload.invoke_arn
+}
+
+# Update deployment to include FastAPI routes
+resource "aws_api_gateway_deployment" "hello_deployment" {
+  rest_api_id = aws_api_gateway_rest_api.hello_api.id
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.hello_resource.id,
+      aws_api_gateway_method.hello_method.id,
+      aws_api_gateway_integration.hello_integration.id,
+      aws_api_gateway_resource.health_resource.id,
+      aws_api_gateway_method.health_method.id,
+      aws_api_gateway_integration.health_integration.id,
+      aws_api_gateway_resource.fastapi_proxy.id,
+      aws_api_gateway_method.fastapi_proxy_method.id,
+      aws_api_gateway_integration.fastapi_proxy_integration.id,
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    aws_api_gateway_method.hello_method,
+    aws_api_gateway_integration.hello_integration,
+    aws_api_gateway_method.health_method,
+    aws_api_gateway_integration.health_integration,
+    aws_api_gateway_method.fastapi_proxy_method,
+    aws_api_gateway_integration.fastapi_proxy_integration,
+  ]
+}

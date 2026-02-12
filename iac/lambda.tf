@@ -93,3 +93,43 @@ resource "aws_lambda_permission" "s3_invoke_summarize_document" {
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.scrap_document_poc.arn
 }
+
+# FastAPI Lambda function for S3 uploads
+resource "aws_lambda_function" "fastapi_s3_upload" {
+  filename         = "../lambdas/fastapi-s3-upload.zip"
+  function_name    = "fastapi-s3-upload"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "app.handler"  # Mangum creates the handler
+  runtime          = "python3.11"
+  timeout          = 30  # 30 seconds for API requests
+  memory_size      = 512  # 512 MB for FastAPI
+  source_code_hash = filebase64sha256("../lambdas/fastapi-s3-upload.zip")
+
+  environment {
+    variables = {
+      S3_BUCKET_NAME       = aws_s3_bucket.scrap_document_poc.bucket
+      UPLOAD_PREFIX        = "new/"
+      S3_ENDPOINT_URL      = "http://localstack-us-east-1:4566"
+      LOCALSTACK_HOSTNAME  = "localstack-us-east-1"
+      AWS_DEFAULT_REGION   = "us-east-1"
+      AWS_ACCESS_KEY_ID    = "test"
+      AWS_SECRET_ACCESS_KEY = "test"
+      MAX_FILE_SIZE        = "10485760"  # 10MB in bytes
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_policy,
+    aws_iam_role_policy.s3_policy,
+    aws_s3_bucket.scrap_document_poc
+  ]
+}
+
+# Lambda permission for API Gateway (FastAPI)
+resource "aws_lambda_permission" "api_gateway_fastapi" {
+  statement_id  = "AllowExecutionFromAPIGatewayFastAPI"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.fastapi_s3_upload.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.hello_api.execution_arn}/*/*"
+}

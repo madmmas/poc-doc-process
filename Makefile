@@ -9,7 +9,8 @@ COMPOSE_PG    := $(COMPOSE_BASE) -f compose/postgres.yml
 .PHONY: up-localstack-us-west-2 down-localstack-us-west-2
 .PHONY: up-postgres down-postgres
 .PHONY: up-localstack down-localstack up-all down-all
-.PHONY: package init apply destroy test clean output open-localstack open-localstack-w2
+.PHONY: package package-fastapi init apply destroy test clean output open-localstack open-localstack-w2
+.PHONY: test-fastapi-unit test-fastapi-integration test-fastapi-all install-test-deps-fastapi
 .PHONY: test-s3 test-s3-success test-s3-fail test-s3-check test-s3-logs test-s3-clean
 
 help: ## Show this help message
@@ -31,6 +32,12 @@ help: ## Show this help message
 	@echo '  test-s3-check             Check S3 bucket contents'
 	@echo '  test-s3-logs              Show Lambda function logs'
 	@echo '  test-s3-clean             Clean up test files from S3'
+	@echo ''
+	@echo 'FastAPI Lambda Tests:'
+	@echo '  test-fastapi-unit         Run FastAPI unit tests (mocked S3)'
+	@echo '  test-fastapi-integration  Run FastAPI integration tests (requires LocalStack)'
+	@echo '  test-fastapi-all          Run all FastAPI tests'
+	@echo '  install-test-deps-fastapi Install test dependencies'
 	@echo ''
 	@echo 'Legacy / convenience:'
 	@echo '  start                     Same as up-localstack-us-east-1'
@@ -95,10 +102,54 @@ open-localstack-w2: ## Open LocalStack us-west-2 in browser
 	$(OPEN_CMD) http://localhost:4567
 
 # ---- Lambda / Terraform ----
-package: ## Package Lambda functions
+package: package-fastapi ## Package all Lambda functions
 	cd lambdas && zip -r hello_lambda.zip lambda_function.py
 	cd lambdas && zip -r health_lambda.zip health_lambda.py
 	cd lambdas && zip -r summarize_document.zip summarize_document.py
+
+package-fastapi: ## Package FastAPI Lambda with dependencies
+	@echo "=== Packaging FastAPI Lambda ==="
+	@echo "Installing dependencies..."
+	cd lambdas/fastapi-s3-upload && \
+		pip install -r requirements.txt -t . --upgrade --quiet && \
+		zip -r ../fastapi-s3-upload.zip . -x "*.pyc" "__pycache__/*" "*.dist-info/*" "*.egg-info/*" "*.txt" "README.md" "tests/*" "pytest.ini" && \
+		echo "FastAPI Lambda packaged successfully"
+
+install-test-deps-fastapi: ## Install runtime and test dependencies for FastAPI Lambda
+	@echo "=== Installing FastAPI dependencies ==="
+	@echo "Installing runtime dependencies..."
+	cd lambdas/fastapi-s3-upload && \
+		pip install -r requirements.txt --quiet
+	@echo "Installing test dependencies..."
+	cd lambdas/fastapi-s3-upload && \
+		pip install -r requirements-test.txt --quiet && \
+		echo "All dependencies installed"
+
+test-fastapi-unit: install-test-deps-fastapi ## Run FastAPI Lambda unit tests
+	@echo "=== Running FastAPI Lambda Unit Tests ==="
+	cd lambdas/fastapi-s3-upload && \
+		pytest tests/test_unit.py -v --tb=short -W default
+
+test-fastapi-integration: install-test-deps-fastapi ## Run FastAPI Lambda integration tests (requires LocalStack)
+	@echo "=== Running FastAPI Lambda Integration Tests ==="
+	@echo "Note: Requires LocalStack S3 service running"
+	@echo "Start with: make up-localstack-us-east-1"
+	@echo ""
+	cd lambdas/fastapi-s3-upload && \
+		S3_ENDPOINT_URL=http://localhost:4566 \
+		S3_BUCKET_NAME=test-integration-bucket \
+		pytest tests/test_integration.py -v -m integration --tb=short
+
+test-fastapi-all: install-test-deps-fastapi ## Run all FastAPI Lambda tests (unit + integration)
+	@echo "=== Running All FastAPI Lambda Tests ==="
+	@echo ""
+	@echo "1. Running unit tests..."
+	@$(MAKE) test-fastapi-unit
+	@echo ""
+	@echo "2. Running integration tests..."
+	@$(MAKE) test-fastapi-integration || echo "Integration tests skipped (LocalStack may not be running)"
+	@echo ""
+	@echo "=== All tests complete ==="
 
 init: ## Initialize Terraform
 	cd iac && terraform init
@@ -220,7 +271,39 @@ test-s3-clean: ## Clean up test files from S3 bucket
 	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/failed/test-fail.json 2>/dev/null || true
 	@echo "Cleanup complete!"
 
+test-fastapi: ## Test FastAPI Lambda endpoints (requires API_ID)
+	@echo "Usage: make test-fastapi API_ID=<your-api-id>"
+	@if [ -z "$(API_ID)" ]; then \
+		echo "Error: API_ID is required"; \
+		echo "Get it from: cd iac && terraform output api_gateway_id"; \
+		exit 1; \
+	fi
+	@echo "=== Testing FastAPI Lambda endpoints ==="
+	@echo ""
+	@echo "1. Root endpoint (health check):"
+	@curl -s "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/" | jq . || echo "Failed"
+	@echo ""
+	@echo "2. Health endpoint:"
+	@curl -s "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/health" | jq . || echo "Failed"
+	@echo ""
+	@echo "3. Upload JSON file:"
+	@curl -X POST "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/upload/json" \
+		-F "file=@tests/test-success.json" | jq . || echo "Failed"
+	@echo ""
+	@echo "4. Upload regular file:"
+	@curl -X POST "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/upload" \
+		-F "file=@tests/test-success.json" | jq . || echo "Failed"
+	@echo ""
+	@echo "=== FastAPI tests complete ==="
+
 clean: ## Clean up generated files
 	rm -f lambdas/*.zip
+	rm -rf lambdas/fastapi-s3-upload/__pycache__
+	rm -rf lambdas/fastapi-s3-upload/tests/__pycache__
+	rm -rf lambdas/fastapi-s3-upload/*.egg-info
+	rm -rf lambdas/fastapi-s3-upload/*.dist-info
+	rm -rf lambdas/fastapi-s3-upload/.pytest_cache
+	rm -rf lambdas/fastapi-s3-upload/.coverage
+	rm -rf lambdas/fastapi-s3-upload/htmlcov
 	rm -rf iac/.terraform
 	rm -f iac/terraform.tfstate iac/terraform.tfstate.backup
