@@ -17,28 +17,6 @@ dist/
 build/
 bin/
 
-# Installed Python packages (from pip install -t .)
-# These should only exist in the zip file, not in source
-annotated_types/
-anyio/
-boto3/
-botocore/
-dateutil/
-fastapi/
-idna/
-jmespath/
-mangum/
-multipart/
-pydantic/
-pydantic_core/
-s3transfer/
-six.py
-sniffio/
-starlette/
-typing_extensions.py
-typing_inspection/
-urllib3/
-
 # IDE
 .vscode/
 .idea/
