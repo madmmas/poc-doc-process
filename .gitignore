@@ -13,11 +13,17 @@ iac/*.tfvars
 # LocalStack
 .localstack/
 
-# Lambda packages
+# Lambda packages / build output
+lambdas/dist/
 lambdas/*.zip
+lambdas/layers/*.zip
 
 # Python
 __pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
 *.py[cod]
 *$py.class
 *.so

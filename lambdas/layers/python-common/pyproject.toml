@@ -1,0 +1,8 @@
+[project]
+name = "lambda-layer-python-common"
+version = "0.1.0"
+description = "Common Python libraries for Lambda (Powertools, etc.)"
+requires-python = ">=3.11"
+dependencies = [
+    "aws-lambda-powertools>=2.0.0",
+]

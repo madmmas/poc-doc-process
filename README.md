@@ -31,8 +31,7 @@ This project demonstrates a simple setup using LocalStack to run AWS Lambda func
 │   ├── api_gateway.tf      # API Gateway resources
 │   └── outputs.tf          # Terraform outputs
 ├── lambdas/                # Lambda function code
-│   ├── lambda_function.py  # Hello Lambda function
-│   └── health_lambda.py    # Health check Lambda function
+│   └── summarize_document/ # Document summarization Lambda (S3-triggered)
 ├── Makefile                # Helper commands (compose, Terraform, test)
 ├── README.md               # This file
 └── .gitignore              # Git ignore rules
@@ -88,15 +87,7 @@ Terraform and the API examples below use **us-east-1** (port 4566) by default.
 
 ### 2. Package Lambda Functions
 
-Create zip files for both Lambda functions:
-
-```bash
-cd lambdas
-zip hello_lambda.zip lambda_function.py
-zip health_lambda.zip health_lambda.py
-```
-
-Or use the Makefile (from project root):
+Package the Lambda function and layer (from project root):
 
 ```bash
 make package
