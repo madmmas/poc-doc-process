@@ -3,12 +3,8 @@
 import * as React from "react"
 import {
   IconDashboard,
-  IconFileDescription,
   IconInnerShadowTop,
-  IconFileTextFilled,
 } from "@tabler/icons-react"
-
-import { NavMain } from "@/components/nav-main"
 
 import {
   Sidebar,
@@ -24,32 +20,6 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
-// const data = {
-//   user: {
-//     name: "GenAI Admin",
-//     email: "admin@genai.com",
-//     avatar: "/avatars/admin.jpg",
-//   },
-//   navMain: [
-//     {
-//       title: "Dashboard",
-//       url: "/dashboard",
-//       icon: IconDashboard,
-//     },
-//     {
-//       title: "Summarizer",
-//       url: "/summarizer",
-//       icon: IconFileDescription,
-//     },
-//     {
-//       title: "Prompts",
-//       url: "/prompts",
-//       icon: IconFileTextFilled,
-//     },
-//   ],
-// }
-
-// This is sample data.
 const data = {
     versions: ["1.0.1", "1.1.0-alpha", "2.0.0-beta1"],
     navMain: [

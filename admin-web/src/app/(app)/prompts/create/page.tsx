@@ -1,5 +1,3 @@
-import { FileUpload } from "@/components/file-upload"
-
 export default function CreatePromptPage() {
   return (
     <div className="min-h-screen">
