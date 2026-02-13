@@ -1,182 +1,36 @@
-# Admin Web App
-
-Next.js + Tailwind CSS + shadcn/ui admin interface for S3 file uploads and document processing.
-
-## Features
-
-- 🎨 **Modern UI** - Built with Tailwind CSS and shadcn/ui components
-- 📤 **File Upload** - Upload files directly to S3 bucket
-- 📄 **JSON Upload** - Special handling for JSON files with validation
-- 🏥 **Health Monitoring** - Check API and S3 bucket health status
-- 📱 **Responsive Design** - Works on desktop and mobile devices
-- 🚀 **Static Export** - Configured for S3 static website hosting
-
-## Tech Stack
-
-- **Next.js 14** - React framework with App Router
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first CSS framework
-- **shadcn/ui** - High-quality React components
-- **Radix UI** - Accessible component primitives
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18+ and npm/yarn/pnpm
-- LocalStack running (for local development)
-- Terraform outputs (API Gateway ID)
-
-### Installation
+First, run the development server:
 
 ```bash
-# Install dependencies
-npm install
-
-# Copy environment variables
-cp .env.example .env.local
-
-# Update .env.local with your API Gateway ID
-# Get it from: cd ../iac && terraform output api_gateway_id
-```
-
-### Development
-
-```bash
-# Start development server
 npm run dev
-
-# Open http://localhost:3000
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-### Build for Production
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```bash
-# Build static export
-npm run build
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-# Output will be in the 'out' directory
-```
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Configuration
+## Learn More
 
-### Environment Variables
+To learn more about Next.js, take a look at the following resources:
 
-Create `.env.local` file:
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-```env
-NEXT_PUBLIC_API_GATEWAY_ID=your-api-gateway-id
-NEXT_PUBLIC_API_STAGE=dev
-NEXT_PUBLIC_API_URL=http://localhost:4566/restapis
-```
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-### For AWS Deployment
+## Deploy on Vercel
 
-```env
-NEXT_PUBLIC_API_GATEWAY_ID=your-api-gateway-id
-NEXT_PUBLIC_API_STAGE=prod
-NEXT_PUBLIC_API_URL=https://your-api-id.execute-api.us-east-1.amazonaws.com
-```
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-## Deployment to S3
-
-### Build Static Export
-
-```bash
-npm run build
-```
-
-This creates an `out/` directory with static files.
-
-### Deploy to S3
-
-```bash
-# Using AWS CLI
-aws s3 sync out/ s3://your-bucket-name --delete
-
-# Or use the Makefile command
-make deploy-admin-web
-```
-
-### Enable Static Website Hosting
-
-```bash
-aws s3 website s3://your-bucket-name \
-  --index-document index.html \
-  --error-document 404.html
-```
-
-## Project Structure
-
-```
-admin-web/
-├── app/                    # Next.js App Router
-│   ├── layout.tsx        # Root layout
-│   ├── page.tsx          # Home page
-│   └── globals.css       # Global styles
-├── components/            # React components
-│   ├── ui/               # shadcn/ui components
-│   ├── file-upload.tsx   # File upload component
-│   └── health-status.tsx # Health check component
-├── lib/                   # Utilities
-│   ├── api.ts            # API client
-│   └── utils.ts          # Helper functions
-└── public/               # Static assets
-```
-
-## Features
-
-### File Upload
-
-- Upload any file type to S3
-- Optional folder organization
-- Real-time upload progress
-- Error handling and validation
-
-### JSON Upload
-
-- Special JSON file handling
-- Format validation
-- Preview of JSON structure
-
-### Health Monitoring
-
-- API health checks
-- S3 bucket accessibility
-- Real-time status updates
-
-## Development
-
-### Adding New Components
-
-```bash
-# Add shadcn/ui component
-npx shadcn-ui@latest add [component-name]
-```
-
-### Styling
-
-- Uses Tailwind CSS utility classes
-- Custom theme in `tailwind.config.ts`
-- CSS variables for theming
-
-## Troubleshooting
-
-### CORS Issues
-
-If you encounter CORS errors, ensure:
-1. API Gateway has CORS enabled
-2. FastAPI Lambda has CORS middleware configured
-3. S3 bucket CORS policy allows your domain
-
-### API Connection Issues
-
-- Verify API Gateway ID is correct
-- Check LocalStack is running (for local dev)
-- Verify API Gateway stage name matches
-
-### Build Issues
-
-- Ensure `output: 'export'` in `next.config.js`
-- Check all images use `unoptimized: true`
-- Verify no server-side features are used
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
