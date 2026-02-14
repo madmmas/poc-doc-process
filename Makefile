@@ -291,6 +291,6 @@ ssm-llm-remote: ## Set summarize_document LLM mode to remote
 	@echo "Redeploy Lambda (make apply) for env to take effect in Terraform-managed Lambda."
 
 clean: ## Clean up all generated files
-	rm -f lambdas/*.zip
+	rm -f lambdas/dist/*.zip
 	rm -rf iac/.terraform
 	rm -f iac/terraform.tfstate iac/terraform.tfstate.backup
