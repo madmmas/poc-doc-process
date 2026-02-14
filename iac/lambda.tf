@@ -7,7 +7,6 @@ resource "aws_lambda_function" "summarize_document" {
   runtime         = "python3.11"
   timeout         = 300  # 5 minutes for document processing
   source_code_hash = filebase64sha256("../lambdas/dist/summarize_document.zip")
-  layers          = [aws_lambda_layer_version.python_common.arn]
 
   environment {
     variables = {
@@ -29,7 +28,6 @@ resource "aws_lambda_function" "summarize_document" {
     aws_iam_role_policy.s3_policy,
     aws_s3_bucket.scrap_document_poc,
     aws_ssm_parameter.summarize_llm_mode,
-    aws_lambda_layer_version.python_common
   ]
 }
 

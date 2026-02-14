@@ -87,7 +87,7 @@ Terraform and the API examples below use **us-east-1** (port 4566) by default.
 
 ### 2. Package Lambda Functions
 
-Package the Lambda function and layer (from project root):
+Package the Lambda function and its dependencies (from project root):
 
 ```bash
 make package

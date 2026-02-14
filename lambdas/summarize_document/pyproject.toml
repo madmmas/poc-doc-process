@@ -3,11 +3,12 @@ name = "summarize-document"
 version = "0.1.0"
 description = "Document summarization Lambda"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "aws-lambda-powertools>=2.0.0",
+]
 
 [dependency-groups]
 dev = [
-    "aws-lambda-powertools>=2.0.0",
     "moto[ssm,secretsmanager,s3]>=4.0.0",
     "mypy>=1.0.0",
     "pytest>=7.0.0",

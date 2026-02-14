@@ -128,14 +128,15 @@ open-localstack-w2: ## Open LocalStack us-west-2 in browser
 # ---- Lambda / Terraform ----
 DIST_DIR := lambdas/dist
 
-package-layer: ## Build python-common Lambda layer (uv) -> lambdas/dist/
+package: ## Package Lambda (code + deps) -> lambdas/dist/ (no layer; LocalStack free tier)
 	@command -v uv >/dev/null 2>&1 || { echo "uv required: https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
 	@mkdir -p $(DIST_DIR)
-	./lambdas/layers/python-common/build-layer.sh $(abspath $(DIST_DIR))
-
-package: package-layer ## Package Lambda functions -> lambdas/dist/
-	@mkdir -p $(DIST_DIR)
-	cd lambdas/summarize_document && zip -r ../../$(DIST_DIR)/summarize_document.zip summarize_document.py
+	@rm -rf $(DIST_DIR)/summarize_document_build
+	@mkdir -p $(DIST_DIR)/summarize_document_build
+	cd lambdas/summarize_document && uv pip install aws-lambda-powertools --target ../../$(DIST_DIR)/summarize_document_build
+	cp lambdas/summarize_document/summarize_document.py $(DIST_DIR)/summarize_document_build/
+	cd $(DIST_DIR)/summarize_document_build && zip -r ../summarize_document.zip .
+	@rm -rf $(DIST_DIR)/summarize_document_build
 
 init: ## Initialize Terraform
 	cd iac && terraform init

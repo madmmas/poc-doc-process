@@ -16,7 +16,6 @@ iac/*.tfvars
 # Lambda packages / build output
 lambdas/dist/
 lambdas/*.zip
-lambdas/layers/*.zip
 
 # Python
 __pycache__/
