@@ -11,6 +11,7 @@ COMPOSE_PG    := $(COMPOSE_BASE) -f compose/postgres.yml
 .PHONY: up-localstack down-localstack up-all down-all
 .PHONY: package init apply destroy test clean output open-localstack open-localstack-w2
 .PHONY: test-s3 test-s3-success test-s3-fail test-s3-check test-s3-logs test-s3-clean
+.PHONY: ssm-llm-local ssm-llm-remote
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -31,6 +32,26 @@ help: ## Show this help message
 	@echo '  test-s3-check             Check S3 bucket contents'
 	@echo '  test-s3-logs              Show Lambda function logs'
 	@echo '  test-s3-clean             Clean up test files from S3'
+	@echo ''
+	@echo 'SSM (summarize_document LLM mode):'
+	@echo '  ssm-llm-local             Set LLM mode to local'
+	@echo '  ssm-llm-remote            Set LLM mode to remote'
+	@echo ''
+	@echo 'FastAPI Lambda Tests:'
+	@echo '  test-fastapi-unit         Run FastAPI unit tests (mocked S3)'
+	@echo '  test-fastapi-integration  Run FastAPI integration tests (requires LocalStack)'
+	@echo '  test-fastapi-all          Run all FastAPI tests'
+	@echo '  install-test-deps-fastapi Install test dependencies'
+	@echo ''
+	@echo 'FastAPI Lambda Packaging:'
+	@echo '  package-fastapi-docker   Package using Docker (recommended)'
+	@echo '  clean-fastapi             Clean installed dependencies from source'
+	@echo ''
+	@echo 'Admin Web App:'
+	@echo '  install-admin-web         Install admin web dependencies'
+	@echo '  dev-admin-web             Start admin web dev server'
+	@echo '  build-admin-web            Build admin web for production'
+	@echo '  deploy-admin-web           Deploy admin web to S3'
 	@echo ''
 	@echo 'Legacy / convenience:'
 	@echo '  start                     Same as up-localstack-us-east-1'
@@ -220,7 +241,77 @@ test-s3-clean: ## Clean up test files from S3 bucket
 	@$(AWS_CLI) s3 rm s3://$(S3_BUCKET)/failed/test-fail.json 2>/dev/null || true
 	@echo "Cleanup complete!"
 
-clean: ## Clean up generated files
+# ---- SSM (summarize_document LLM mode) ----
+SSM_LLM_PARAM := /poc-doc-process/summarize-document/llm-mode
+
+ssm-llm-local: ## Set summarize_document LLM mode to local
+	@$(AWS_CLI) ssm put-parameter --name "$(SSM_LLM_PARAM)" --value "local" --type String --overwrite
+	@echo "SSM parameter $(SSM_LLM_PARAM) set to: local"
+	@echo "Redeploy Lambda (make apply) for env to take effect in Terraform-managed Lambda."
+
+ssm-llm-remote: ## Set summarize_document LLM mode to remote
+	@$(AWS_CLI) ssm put-parameter --name "$(SSM_LLM_PARAM)" --value "remote" --type String --overwrite
+	@echo "SSM parameter $(SSM_LLM_PARAM) set to: remote"
+	@echo "Redeploy Lambda (make apply) for env to take effect in Terraform-managed Lambda."
+
+test-fastapi: ## Test FastAPI Lambda endpoints (requires API_ID)
+	@echo "Usage: make test-fastapi API_ID=<your-api-id>"
+	@if [ -z "$(API_ID)" ]; then \
+		echo "Error: API_ID is required"; \
+		echo "Get it from: cd iac && terraform output api_gateway_id"; \
+		exit 1; \
+	fi
+	@echo "=== Testing FastAPI Lambda endpoints ==="
+	@echo ""
+	@echo "1. Root endpoint (health check):"
+	@curl -s "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/" | jq . || echo "Failed"
+	@echo ""
+	@echo "2. Health endpoint:"
+	@curl -s "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/health" | jq . || echo "Failed"
+	@echo ""
+	@echo "3. Upload JSON file:"
+	@curl -X POST "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/upload/json" \
+		-F "file=@tests/test-success.json" | jq . || echo "Failed"
+	@echo ""
+	@echo "4. Upload regular file:"
+	@curl -X POST "http://localhost:4566/restapis/$(API_ID)/dev/_user_request_/upload" \
+		-F "file=@tests/test-success.json" | jq . || echo "Failed"
+	@echo ""
+	@echo "=== FastAPI tests complete ==="
+
+# ---- Admin Web App ----
+ADMIN_WEB_BUCKET := admin-web-poc
+ADMIN_WEB_DIR := admin-web
+
+install-admin-web: ## Install admin web dependencies
+	@echo "=== Installing Admin Web dependencies ==="
+	cd $(ADMIN_WEB_DIR) && npm install
+
+dev-admin-web: ## Start admin web development server
+	@echo "=== Starting Admin Web dev server ==="
+	cd $(ADMIN_WEB_DIR) && npm run dev
+
+build-admin-web: ## Build admin web for production
+	@echo "=== Building Admin Web ==="
+	cd $(ADMIN_WEB_DIR) && npm run build
+
+deploy-admin-web: build-admin-web ## Deploy admin web to S3
+	@echo "=== Deploying Admin Web to S3 ==="
+	@echo "Bucket: $(ADMIN_WEB_BUCKET)"
+	@echo "Note: Ensure bucket exists and static website hosting is enabled"
+	aws s3 sync $(ADMIN_WEB_DIR)/out/ s3://$(ADMIN_WEB_BUCKET)/ --delete --endpoint-url http://localhost:4566 || \
+		echo "Deployment failed. Check bucket exists and AWS credentials."
+
+clean-fastapi: ## Clean up installed dependencies from fastapi-s3-upload directory
+	@echo "=== Cleaning FastAPI Lambda source directory ==="
+	cd lambdas/fastapi-s3-upload && \
+		rm -rf __pycache__ .pytest_cache .coverage htmlcov && \
+		rm -rf *.egg-info *.dist-info bin/ && \
+		rm -rf annotated_types anyio boto3 botocore dateutil fastapi idna jmespath mangum multipart pydantic pydantic_core s3transfer sniffio starlette typing_inspection urllib3 && \
+		rm -f six.py typing_extensions.py && \
+		echo "FastAPI source directory cleaned"
+
+clean: clean-fastapi ## Clean up all generated files
 	rm -f lambdas/*.zip
 	rm -rf iac/.terraform
 	rm -f iac/terraform.tfstate iac/terraform.tfstate.backup
