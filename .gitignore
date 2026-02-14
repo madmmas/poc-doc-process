@@ -37,4 +37,4 @@ ENV/
 .DS_Store
 Thumbs.db
 
-admin-web/
+lambdas/dist/
