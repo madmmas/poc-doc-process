@@ -69,19 +69,21 @@ resource "aws_lambda_function" "summarize_document" {
 
   environment {
     variables = {
-      S3_BUCKET_NAME       = aws_s3_bucket.scrap_document_poc.bucket
+      S3_BUCKET_NAME        = aws_s3_bucket.scrap_document_poc.bucket
       S3_ENDPOINT_URL      = "http://localstack-us-east-1:4566"  # LocalStack S3 endpoint
-      LOCALSTACK_HOSTNAME   = "localstack-us-east-1"
+      LOCALSTACK_HOSTNAME  = "localstack-us-east-1"
       AWS_DEFAULT_REGION   = "us-east-1"
       AWS_ACCESS_KEY_ID    = "test"
       AWS_SECRET_ACCESS_KEY = "test"
+      LLM_MODE             = aws_ssm_parameter.summarize_llm_mode.value
     }
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda_policy,
     aws_iam_role_policy.s3_policy,
-    aws_s3_bucket.scrap_document_poc
+    aws_s3_bucket.scrap_document_poc,
+    aws_ssm_parameter.summarize_llm_mode
   ]
 }
 
