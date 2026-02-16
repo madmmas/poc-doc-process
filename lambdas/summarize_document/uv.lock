@@ -1330,10 +1330,12 @@ wheels = [
 name = "summarize-document"
 version = "0.1.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "aws-lambda-powertools" },
+]
 
 [package.dev-dependencies]
 dev = [
-    { name = "aws-lambda-powertools" },
     { name = "moto", extra = ["s3", "ssm"] },
     { name = "mypy" },
     { name = "pytest" },
@@ -1344,10 +1346,10 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "aws-lambda-powertools", specifier = ">=2.0.0" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "aws-lambda-powertools", specifier = ">=2.0.0" },
     { name = "moto", extras = ["ssm", "secretsmanager", "s3"], specifier = ">=4.0.0" },
     { name = "mypy", specifier = ">=1.0.0" },
     { name = "pytest", specifier = ">=7.0.0" },

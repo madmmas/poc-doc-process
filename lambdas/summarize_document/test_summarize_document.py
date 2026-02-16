@@ -8,7 +8,16 @@ import pytest
 from botocore.exceptions import ClientError
 from moto import mock_aws
 
-from summarize_document import get_llm_mode, get_openai_api_key, lambda_handler, move_s3_object
+from summarize_document import (
+    fetch_document,
+    get_llm_mode,
+    get_openai_api_key,
+    lambda_handler,
+    move_s3_object,
+    parse_s3_record,
+    process_record,
+    should_process_successfully,
+)
 
 SSM_PARAM_NAME = "/poc-doc-process/summarize-document/llm-mode"
 SECRET_NAME = "poc-doc-process/openai-api-key"
@@ -79,6 +88,110 @@ class TestGetOpenaiApiKey:
     @mock_aws
     def test_returns_none_when_secret_does_not_exist(self):
         assert get_openai_api_key() is None
+
+
+class TestParseS3Record:
+    """Tests for parse_s3_record() - no mocks needed."""
+
+    def test_returns_bucket_and_key_when_key_in_new_folder(self):
+        record = {
+            "s3": {
+                "bucket": {"name": "my-bucket"},
+                "object": {"key": "new%2Fdoc.json"},
+            }
+        }
+        assert parse_s3_record(record) == ("my-bucket", "new/doc.json")
+
+    def test_returns_none_when_key_not_in_new_folder(self):
+        record = {
+            "s3": {
+                "bucket": {"name": "my-bucket"},
+                "object": {"key": "processed%2Fdoc.json"},
+            }
+        }
+        assert parse_s3_record(record) is None
+
+    def test_returns_none_when_record_malformed(self):
+        assert parse_s3_record({}) is None
+        assert parse_s3_record({"s3": {}}) is None
+
+
+class TestShouldProcessSuccessfully:
+    """Tests for should_process_successfully() - pure function."""
+
+    def test_true_when_no_should_fail(self):
+        assert should_process_successfully({}) is True
+        assert should_process_successfully({"title": "x"}) is True
+        assert should_process_successfully({"should_fail": False}) is True
+
+    def test_false_when_should_fail_true(self):
+        assert should_process_successfully({"should_fail": True}) is False
+
+
+class TestFetchDocument:
+    """Tests for fetch_document() with moto S3."""
+
+    @mock_aws
+    def test_returns_content_type_length_and_parsed_json(self):
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=BUCKET)
+        doc = {"title": "Test", "n": 42}
+        s3.put_object(
+            Bucket=BUCKET,
+            Key="new/doc.json",
+            Body=json.dumps(doc).encode(),
+            ContentType="application/json",
+        )
+        result = fetch_document(s3, BUCKET, "new/doc.json")
+        assert result["content_type"] == "application/json"
+        assert result["content_length"] == len(json.dumps(doc).encode())
+        assert result["document_data"] == doc
+
+    @mock_aws
+    def test_raises_when_object_missing(self):
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=BUCKET)
+        with pytest.raises(ClientError):
+            fetch_document(s3, BUCKET, "new/missing.json")
+
+
+class TestProcessRecord:
+    """Tests for process_record() - single-record processing with moto."""
+
+    @mock_aws
+    def test_success_moves_to_processed_and_returns_200(self):
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=BUCKET)
+        s3.put_object(
+            Bucket=BUCKET,
+            Key="new/doc.json",
+            Body=json.dumps({"title": "Test", "should_fail": False}).encode(),
+            ContentType="application/json",
+        )
+        result = process_record(s3, BUCKET, "new/doc.json", "local")
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["status"] == "success"
+        assert body["new_location"] == "processed/doc.json"
+        with pytest.raises(ClientError):
+            s3.head_object(Bucket=BUCKET, Key="new/doc.json")
+        s3.head_object(Bucket=BUCKET, Key="processed/doc.json")
+
+    @mock_aws
+    def test_failure_moves_to_failed_and_returns_500(self):
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=BUCKET)
+        s3.put_object(
+            Bucket=BUCKET,
+            Key="new/doc.json",
+            Body=json.dumps({"should_fail": True}).encode(),
+            ContentType="application/json",
+        )
+        result = process_record(s3, BUCKET, "new/doc.json", "local")
+        assert result["statusCode"] == 500
+        body = json.loads(result["body"])
+        assert body["status"] == "error"
+        s3.head_object(Bucket=BUCKET, Key="failed/doc.json")
 
 
 class TestMoveS3Object:

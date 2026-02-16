@@ -258,7 +258,7 @@ format-summarize: ## Auto-format summarize_document with ruff
 	cd lambdas/summarize_document && uv run ruff check . --fix && uv run ruff format .
 
 safety-summarize: ## Check dependencies for known vulnerabilities
-	cd lambdas/summarize_document && uv run safety check || true
+	cd lambdas/summarize_document && uv run safety scan || true
 
 typecheck-summarize: ## Run mypy type checker
 	@echo "=== Type checking summarize_document ==="
