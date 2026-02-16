@@ -27,14 +27,29 @@ logger = Logger(service="summarize_document")
 metrics = Metrics(namespace="PocDocProcess", service="summarize_document")
 
 # -----------------------------------------------------------------------------
-# AWS clients (module-level for reuse across warm Lambda invocations; names
-# used by tests for patching). s3_client is set by handler or tests.
-# Explicit region avoids NoRegionError when no AWS config (e.g. CI/test collect).
+# AWS clients: lazy-init so tests can use moto (@mock_aws) without patching.
+# Cached after first use for Lambda reuse. s3_client is set by handler or tests.
 # -----------------------------------------------------------------------------
 _DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-ssm_client = boto3.client("ssm", region_name=_DEFAULT_REGION)
-secrets_client = boto3.client("secretsmanager", region_name=_DEFAULT_REGION)
+_ssm_client: Any = None
+_secrets_client: Any = None
 s3_client: Any = None
+
+
+def _get_ssm_client() -> Any:
+    """Return cached SSM client or create one (lazy init for moto-friendly tests)."""
+    global _ssm_client
+    if _ssm_client is None:
+        _ssm_client = boto3.client("ssm", region_name=_DEFAULT_REGION)
+    return _ssm_client
+
+
+def _get_secrets_client() -> Any:
+    """Return cached Secrets Manager client or create one (lazy init for moto-friendly tests)."""
+    global _secrets_client
+    if _secrets_client is None:
+        _secrets_client = boto3.client("secretsmanager", region_name=_DEFAULT_REGION)
+    return _secrets_client
 
 
 def get_llm_mode() -> str:
@@ -44,7 +59,7 @@ def get_llm_mode() -> str:
     """
     llm_mode = "local"
     try:
-        response = ssm_client.get_parameter(Name=SSM_PARAM_LLM_MODE)
+        response = _get_ssm_client().get_parameter(Name=SSM_PARAM_LLM_MODE)
         value = response["Parameter"]["Value"]
         llm_mode = value if value in VALID_LLM_MODES else "local"
     except Exception as e:
@@ -58,7 +73,7 @@ def get_openai_api_key() -> str | None:
     Returns None on error.
     """
     try:
-        response = secrets_client.get_secret_value(SecretId=SECRET_ID_OPENAI_API_KEY)
+        response = _get_secrets_client().get_secret_value(SecretId=SECRET_ID_OPENAI_API_KEY)
         return cast(str | None, response.get("SecretString"))
     except Exception as e:
         logger.warning("Error getting secret", extra={"error": str(e)})

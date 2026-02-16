@@ -6,6 +6,16 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def reset_aws_client_caches():
+    """Clear lazy-initialized AWS client caches so each test gets a fresh client under @mock_aws."""
+    import summarize_document as mod
+
+    mod._ssm_client = None
+    mod._secrets_client = None
+    yield
+
+
+@pytest.fixture(autouse=True)
 def set_powertools_env():
     """Set Powertools env vars required for Lambda handler tests."""
     os.environ.setdefault("POWERTOOLS_SERVICE_NAME", "summarize_document")

@@ -1,7 +1,7 @@
 """Pytest tests for summarize_document lambda."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
@@ -25,7 +25,7 @@ BUCKET = "test-bucket"
 
 
 class TestGetLlmMode:
-    """Tests for get_llm_mode() using moto."""
+    """Tests for get_llm_mode() using moto (no patch: lazy client picks up moto)."""
 
     @mock_aws
     def test_returns_local_when_ssm_returns_local(self):
@@ -53,36 +53,35 @@ class TestGetLlmMode:
 
     @mock_aws
     def test_returns_local_when_value_is_empty_string(self):
-        # SSM PutParameter rejects Value=""; patch get_parameter to simulate empty value
-        with patch(
-            "summarize_document.ssm_client.get_parameter",
-            return_value={"Parameter": {"Name": SSM_PARAM_NAME, "Value": "", "Type": "String"}},
-        ):
+        # SSM PutParameter rejects Value=""; patch getter to return mock with empty value
+        mock_ssm = MagicMock()
+        mock_ssm.get_parameter.return_value = {
+            "Parameter": {"Name": SSM_PARAM_NAME, "Value": "", "Type": "String"},
+        }
+        with patch("summarize_document._get_ssm_client", return_value=mock_ssm):
             assert get_llm_mode() == "local"
 
     @mock_aws
     def test_returns_local_when_parameter_does_not_exist(self):
+        # No parameter in moto SSM -> get_parameter raises -> fallback to "local"
         assert get_llm_mode() == "local"
 
 
 class TestGetOpenaiApiKey:
-    """Tests for get_openai_api_key() using moto."""
+    """Tests for get_openai_api_key() using moto (no patch: lazy client picks up moto)."""
 
     @mock_aws
     def test_returns_secret_string_on_success(self):
         sm = boto3.client("secretsmanager", region_name="us-east-1")
-        # Use same SecretId as lambda: get_secret_value(SecretId="/poc-doc-process/openai-api-key")
         sm.create_secret(Name="/poc-doc-process/openai-api-key", SecretString="sk-test-key-123")
-        with patch("summarize_document.secrets_client", sm):
-            assert get_openai_api_key() == "sk-test-key-123"
+        assert get_openai_api_key() == "sk-test-key-123"
 
     @mock_aws
     def test_returns_empty_string_when_secret_is_empty(self):
-        # AWS rejects SecretString=""; mock get_secret_value to return empty string
-        with patch(
-            "summarize_document.secrets_client.get_secret_value",
-            return_value={"SecretString": ""},
-        ):
+        # AWS rejects SecretString=""; patch getter to return mock with empty secret
+        mock_sm = MagicMock()
+        mock_sm.get_secret_value.return_value = {"SecretString": ""}
+        with patch("summarize_document._get_secrets_client", return_value=mock_sm):
             assert get_openai_api_key() == ""
 
     @mock_aws
