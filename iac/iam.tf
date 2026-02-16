@@ -22,32 +22,6 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# IAM policy for DynamoDB access
-resource "aws_iam_role_policy" "dynamodb_policy" {
-  name = "dynamodb-access-policy"
-  role = aws_iam_role.lambda_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
-        ]
-        Resource = [
-          aws_dynamodb_table.health_table.arn
-        ]
-      }
-    ]
-  })
-}
-
 # IAM policy for S3 access (for summarize_document Lambda)
 resource "aws_iam_role_policy" "s3_policy" {
   name = "s3-access-policy"

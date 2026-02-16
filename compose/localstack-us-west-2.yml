@@ -10,13 +10,15 @@ services:
       - "127.0.0.1:4567:4566"
       - "127.0.0.1:4510-4559:4510-4559"
     environment:
-      - SERVICES=lambda,apigateway,iam,sts,dynamodb,logs
+      - SERVICES=lambda,iam,sts,s3,logs,ssm,secretsmanager,metrics
       - DEBUG=1
       - DATA_DIR=/tmp/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
       - AWS_DEFAULT_REGION=us-west-2
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_REMOTE_DOCKER=false
     volumes:
       - "./.localstack-us-west-2:/var/lib/localstack-us-west-2"
       - "/var/run/docker.sock:/var/run/docker.sock"
