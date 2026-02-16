@@ -2,12 +2,12 @@ name: Check summarize_document Lambda
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feature/*, feat/*]
     paths:
       - "lambdas/summarize_document/**"
       - ".github/workflows/check-summarize.yml"
   pull_request:
-    branches: [main, master]
+    branches: [main, master, feature/*, feat/*]
     paths:
       - "lambdas/summarize_document/**"
       - ".github/workflows/check-summarize.yml"
