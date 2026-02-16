@@ -29,9 +29,11 @@ metrics = Metrics(namespace="PocDocProcess", service="summarize_document")
 # -----------------------------------------------------------------------------
 # AWS clients (module-level for reuse across warm Lambda invocations; names
 # used by tests for patching). s3_client is set by handler or tests.
+# Explicit region avoids NoRegionError when no AWS config (e.g. CI/test collect).
 # -----------------------------------------------------------------------------
-ssm_client = boto3.client("ssm")
-secrets_client = boto3.client("secretsmanager")
+_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+ssm_client = boto3.client("ssm", region_name=_DEFAULT_REGION)
+secrets_client = boto3.client("secretsmanager", region_name=_DEFAULT_REGION)
 s3_client: Any = None
 
 
